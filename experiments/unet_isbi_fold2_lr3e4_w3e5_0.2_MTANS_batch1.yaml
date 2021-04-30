@@ -1,0 +1,70 @@
+net: Unet_binary_sdf
+net_params:
+  n: 16
+  dropout: 0.3
+  norm: gn
+  num_classes: 2  
+num_classes: 2
+criterion: cross_entropy_dice_binary
+alpha: 0.01
+dataset: SingleData
+seed: 12345
+gpu: 0
+batch_size: 1
+labeled_bs: 0
+num_epochs: 600
+save_freq: 50    # save every 50 epochs
+valid_freq: 1   # validate every 10 epochs
+start_iter: 0
+opt: Adam
+
+unet: true
+PREVIEW: true
+self: false
+
+semi_start: 0
+lambda_adv_pred: 0.1
+lambda_semi: 0.01
+lambda_semi_adv: 0.1
+semi_start_adv: 0
+D_remain: True
+mask_T: 0.2
+lambda_fm: 0.1
+lambda_st: 1.0
+threshold_st: 0.6
+labeled_ratio : 0.5
+max_iterations: 40000
+power: 0.9
+learning_rate: 3e-4
+momentum: 0.9
+weight_decay: 0.0005
+learning_rate_S: 3e-4
+learning_rate_D: 1e-4
+opt_params: 
+  lr: 3e-4
+  weight_decay: 3e-5
+opt_D: SGD
+opt_params_D:
+ lr: 0.0001
+ momentum: 0.5
+ weight_decay: 0.0001
+workers: 8
+#schedule: {60, 120} # original for 160 epochs
+schedule: {1, 3} # based on epochs
+#data settings
+all_train_list: all_train_0.2.txt
+lab_train_list: lab_train_0.2.txt
+unlab_train_list: unlab_train_0.2.txt
+valid_list: valid_0.2.txt
+trainval_list: trainval.txt
+data_dir: /emc_lun1/cgx/Script/U-Net_CNN/SemiSeg/code/BraTS2018/isbi2015/training
+train_transforms: # for training
+  Compose([
+    RandCrop(128),
+    NumpyType((np.float32, np.int64)),
+    ])
+test_transforms: # for testing
+  Compose([
+    Pad((0, 11, 23, 11, 0)),
+    NumpyType((np.float32, np.int64, np.int64)),
+    ])
