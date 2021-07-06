@@ -44,7 +44,6 @@ parser.add_argument('-input_size', '--input_size', default='128,128,128', type=s
 					help="Comma-separated string with height and width of images.")
 parser.add_argument('--beta', type=float,  default=0.3, help='balance factor to control regional and sdm loss')
 parser.add_argument('--ema_decay', type=float,	default=0.99, help='ema_decay')
-parser.add_argument('--consistency', type=float,  default=0.1, help='consistency')
 parser.add_argument('--consistency_rampup', type=float,	 default=40.0, help='consistency_rampup')
 
 # parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
@@ -77,9 +76,13 @@ snapshot_path = "./model/" + args.cfg + "/"
 
 
 
-def get_current_consistency_weight(epoch):
+def get_current_consistency_con_weight(epoch):
 	# Consistency ramp-up from https://arxiv.org/abs/1610.02242
-	return args.consistency * ramps.sigmoid_rampup(epoch, args.consistency_rampup)
+	return args.con_weight * ramps.sigmoid_rampup(epoch, args.consistency_rampup)
+
+def get_current_consistency_adv_weight(epoch):
+	# Consistency ramp-up from https://arxiv.org/abs/1610.02242
+	return args.adv_weight * ramps.sigmoid_rampup(epoch, args.consistency_rampup)
 
 def update_ema_variables(model, ema_model, alpha, global_step):
 	# Use the true average until the exponential average is more correct
@@ -822,8 +825,8 @@ def main():
 
 # calculate the loss
 		epo = int((i_iter+1) // enum_batches)
-		consistency_weight = get_current_consistency_weight(epo)
-		adv_weight = get_current_consistency_weight(i_iter//150)
+		con_weight = get_current_consistency_con_weight(epo)
+		adv_weight = get_current_consistency_adv_weight(i_iter//150)
 		# consistency_dist = softmax_mse_WT_loss(pred_output, ema_output) #(batch, 2, 112,112,80)
 		
 		image_flair = images_remain[:, 0:1]
@@ -874,7 +877,7 @@ def main():
 		# threshold = (0.75+0.25*ramps.sigmoid_rampup(i_iter, args.max_iterations))*np.log(2)
 		# mask = (uncertainty<threshold).float()
 		# consistency_dist = torch.sum(mask*consistency_dist)/(2*torch.sum(mask)+1e-16)
-		consistency_loss = consistency_weight * consistency_dist
+		consistency_loss = con_weight * consistency_dist
 		
 
 
@@ -887,7 +890,7 @@ def main():
 
 		loss_adv = F.cross_entropy(Doutputs, Dtarget[:1].long())
 
-		loss = loss_seg	 + loss_G + consistency_loss + args.beta * loss_sdf +  adv_weight * loss_adv
+		loss = loss_seg	 + loss_G + con_weight * consistency_dist + args.sdm_weight * loss_sdf + adv_weight * loss_adv
 		
 
 		
@@ -996,15 +999,16 @@ def main():
 		writer.add_scalar('loss/consistency_loss', consistency_loss, i_iter)
 		writer.add_scalar('loss/loss_sdf', loss_sdf, i_iter)
 		writer.add_scalar('loss/loss_adv', loss_adv, i_iter) 
-		writer.add_scalar('loss/loss_G', loss_adv, i_iter)        
-		writer.add_scalar('train/consistency_weight', consistency_weight, i_iter)
+		writer.add_scalar('loss/loss_G', loss_adv, i_iter)		  
+		writer.add_scalar('train/consistency_weight', con_weight, i_iter)
+		writer.add_scalar('train/adv_weight', adv_weight, i_iter)
 		writer.add_scalar('train/consistency_dist', consistency_dist, i_iter)		 
 
 
 		# print('iter = {0:8d}/{1:8d}, loss_dc_ce = {2:.3f}, loss_fm = {3:.3f}, loss_S = {4:.3f}, loss_D = {5:.3f}'.format(i_iter, args.max_iterations, loss_ce_value, loss_fm_value, loss_S_value, loss_D_value))
 		
 		
-		msg = 'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f}, loss_G = {3:.3f}, consistency_loss = {4:.6f}, consistency_weight = {5:.6f}, consistency_dist = {6:.6f}, loss_sdf = {7:.6f}, loss_adv = {8:.6f}, adv_weight = {9:.6f}'.format(i_iter, args.max_iterations, losses.avg, loss_G_value, loss_consistency_value, consistency_weight, consistency_dist, loss_sdf_value, loss_adv_value, adv_weight)
+		msg = 'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f}, loss_G = {3:.3f}, consistency_loss = {4:.6f}, con_weight = {5:.6f}, consistency_dist = {6:.6f}, loss_sdf = {7:.6f}, loss_adv = {8:.6f}, adv_weight = {9:.6f}, sdm_weight = {10:.6f}'.format(i_iter, args.max_iterations, losses.avg, loss_G_value, loss_consistency_value, con_weight, consistency_dist, loss_sdf_value, loss_adv_value, adv_weight, args.sdm_weight)
 		
 		# msg = 'iter = {0:8d}/{1:8d}, Loss {2:.4f}'.format(
 				 # i_iter, args.max_iterations, losses.avg)
